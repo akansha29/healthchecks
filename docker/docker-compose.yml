@@ -4,12 +4,17 @@ volumes:
 
 services:
   db:
-    image: postgres:12
+    image: mysql:8.0.26
     volumes:
-      - db-data:/var/lib/postgresql
+      - db-data:/var/lib/mysql
     environment:
-      - POSTGRES_DB=$DB_NAME
-      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - MYSQL_ROOT_PASSWORD=HC@password@123
+      - MYSQL_DATABASE=hc
+      #- MYSQL_USER=django
+      #- MYSQL_PASSWORD=HC@password@123
+    ports:
+      - 3306:3306
+
   web:
     build:
         context: ..
@@ -20,5 +25,5 @@ services:
         - 8000:8000
     depends_on:
         - db
-    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; uwsgi /opt/healthchecks/docker/uwsgi.ini'
+    command: bash -c 'while !</dev/tcp/db/3306; do sleep 10; done; uwsgi /hlthchk/healthchecks/docker/uwsgi.ini'
 

@@ -115,6 +115,8 @@ DATABASES = {
     }
 }
 
+os.environ['DB'] = 'mysql'
+os.environ['DB_HOST'] = 'db'
 # You can switch database engine to postgres or mysql using environment
 # variable 'DB'. Travis CI does this.
 if os.getenv("DB") == "postgres":
@@ -141,11 +143,11 @@ if os.getenv("DB") == "mysql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "HOST": os.getenv("DB_HOST", ""),
-            "PORT": os.getenv("DB_PORT", ""),
+            "HOST": os.getenv("DB_HOST", "db"),
+            "PORT": os.getenv("DB_PORT", "3306"),
             "NAME": os.getenv("DB_NAME", "hc"),
-            "USER": os.getenv("DB_USER", "root"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "USER": os.getenv("DB_USER", "django"),
+            "PASSWORD": os.getenv("DB_PASSWORD", "HC@password@123"),
             "TEST": {"CHARSET": "UTF8"},
         }
     }

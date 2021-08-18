@@ -30,7 +30,7 @@ SSL-terminating load balancer or reverse proxy in front of it.
 
 * Create a superuser:
 
-        $ docker-compose run web /opt/healthchecks/manage.py createsuperuser
+        $ docker-compose run web /hlthchk/healthchecks/manage.py createsuperuser
 
 * Open [http://localhost:8000](http://localhost:8000) in your browser and log in with
   the credentials from the previous step.

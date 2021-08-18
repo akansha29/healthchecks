@@ -200,7 +200,7 @@
             <h2>Slack</h2>
             <p>A messaging app for teams.</p>
             {% if enable_slack_btn %}
-            <a href="{% url 'hc-add-slack-btn' project.code %}" class="btn btn-primary">Add Integration</a>
+            <a href="{% url 'hc-add-slack' project.code %}" class="btn btn-primary">Add Integration</a>
             {% else %}
             <a href="{% url 'hc-add-slack' project.code %}" class="btn btn-primary">Add Integration</a>
             {% endif %}
