@@ -16,6 +16,7 @@ Endpoint Name                                         | Endpoint Address
 [Get a list of check's logged pings](#list-pings)     | `GET SITE_ROOT/api/v1/checks/<uuid>/pings/`
 [Get a list of check's status changes](#list-flips)   | `GET SITE_ROOT/api/v1/checks/<uuid>/flips/`<br>`GET SITE_ROOT/api/v1/checks/<unique_key>/flips/`
 [Get a list of existing integrations](#list-channels) | `GET SITE_ROOT/api/v1/channels/`
+[Get project's badges](#list-badges)                  | `GET SITE_ROOT/api/v1/badges/`
 
 ## Authentication
 
@@ -33,6 +34,7 @@ read-only key
     * [Get a list of existing checks](#list-checks)
     * [Get a single check](#get-check)
     * [Get a list of check's status changes](#list-flips)
+    * [Get project's badges](#list-badges)
 
     Omits sensitive information from the API responses. See the documentation of
     individual API endpoints for details.
@@ -132,6 +134,9 @@ curl --header "X-Api-Key: your-api-key" SITE_ROOT/api/v1/checks/
 }
 ```
 
+The possible values for the `status` field are: `new`, `started`, `up`, `grace`, `down`,
+and `paused`.
+
 When using the read-only API key, SITE_NAME omits the following fields from responses:
 `ping_url`, `update_url`, `pause_url`, `channels`.  It adds an extra
 `unique_key` field. The `unique_key` identifier is stable across API calls, and
@@ -227,6 +232,9 @@ curl --header "X-Api-Key: your-api-key" SITE_ROOT/api/v1/checks/<uuid>
   "tz": "UTC"
 }
 ```
+
+The possible values for the `status` field are: `new`, `started`, `up`, `grace`, `down`,
+and `paused`.
 
 ### Example Read-Only Response
 
@@ -940,3 +948,80 @@ curl --header "X-Api-Key: your-api-key" SITE_ROOT/api/v1/channels/
   ]
 }
 ```
+
+## Get Project's Badges {: #list-badges .rule }
+
+`GET SITE_ROOT/api/v1/badges/`
+
+Returns a map of all tags in the project, with badge URLs for each tag. SITE_NAME
+provides badges in a few different formats:
+
+* `svg`: returns the badge as a SVG document.
+* `json`: returns a JSON document which you can use to generate a custom badge
+    yourself.
+* `shields`: returns JSON in a [Shields.io compatible format](https://shields.io/endpoint).
+
+In addition, badges have 2-state and 3-state variations:
+
+* `svg`, `json`, `shields`: reports two states: "up" and "down". It
+    considers any checks in the grace period as still "up".
+* `svg3`, `json3`, `shields3`: reports three states: "up", "late", and "down".
+
+The response includes a special `*` entry: this pseudo-tag reports the overal status
+of all checks in the project.
+
+### Response Codes
+
+200 OK
+:   The request succeeded.
+
+401 Unauthorized
+:   The API key is either missing or invalid.
+
+### Example Request
+
+```bash
+curl --header "X-Api-Key: your-api-key" SITE_ROOT/api/v1/badges/
+```
+
+### Example Response
+
+```json
+{
+  "badges": {
+    "backup": {
+      "svg": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M-2/backup.svg",
+      "svg3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M/backup.svg",
+      "json": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M-2/backup.json",
+      "json3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M/backup.json",
+      "shields": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M-2/backup.shields",
+      "shields3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/LOegDs5M/backup.shields"
+    },
+    "db": {
+      "svg": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm-2/db.svg",
+      "svg3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm/db.svg",
+      "json": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm-2/db.json",
+      "json3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm/db.json",
+      "shields": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm-2/db.shields",
+      "shields3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/99MuQaKm/db.shields"
+    },
+    "prod": {
+      "svg": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8-2/prod.svg",
+      "svg3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8/prod.svg",
+      "json": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8-2/prod.json",
+      "json3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8/prod.json",
+      "shields": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8-2/prod.shields",
+      "shields3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/1TEhqie8/prod.shields"
+    },
+    "*": {
+      "svg": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe-2.svg",
+      "svg3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe.svg",
+      "json": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe-2.json",
+      "json3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe.json",
+      "shields": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe-2.shields",
+      "shields3": "SITE_ROOT/badge/67541b37-8b9c-4d17-b952-690eae/9X7kcZoe.shields"
+    }
+  }
+}
+```
+

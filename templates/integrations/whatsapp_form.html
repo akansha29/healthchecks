@@ -1,15 +1,32 @@
 {% extends "base.html" %}
 {% load humanize static hc_extras %}
 
-{% block title %}Add Signal Integration - {{ site_name }}{% endblock %}
+{% block title %}
+{% if is_new %}
+Add WhatsApp Integration - {% site_name %}
+{% else %}
+WhatsApp Settings - {% site_name %}
+{% endif %}
+{% endblock %}
 
 
 {% block content %}
 <div class="row">
 <div class="col-sm-12">
-    <h1>Signal</h1>
+    <h1>WhatsApp</h1>
 
-    <p>Get a Signal message when a check goes up or down.</p>
+    <p>
+        Get a WhatsApp message when a check goes up or down.
+    </p>
+
+    {% if show_pricing and profile.sms_limit == 0 %}
+    <p class="alert alert-info">
+        <strong>Paid plan required.</strong>
+        WhatsApp messaging is not available on the free plan–sending the messages
+        cost too much! Please upgrade to a
+        <a href="{% url 'hc-billing' %}">paid plan</a> to enable WhatsApp messaging.
+    </p>
+    {% endif %}
 
     <h2>Integration Settings</h2>
 
@@ -63,7 +80,7 @@
             </div>
         </div>
 
-        <div id="add-email-notify-group" class="form-group">
+        <div class="form-group {{ form.down.css_classes }}">
             <label class="col-sm-2 control-label">Notify When</label>
             <div class="col-sm-10">
                 <label class="checkbox-container">
@@ -83,6 +100,11 @@
                         {% if form.up.value %} checked {% endif %}>
                     <span class="checkmark"></span>
                     A check goes <strong>up</strong>
+                    {% if form.down.errors %}
+                    <div class="help-block">
+                        {{ form.down.errors|join:"" }}
+                    </div>
+                    {% endif %}
                 </label>
             </div>
         </div>

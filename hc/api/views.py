@@ -21,11 +21,12 @@ from hc.api import schemas
 from hc.api.decorators import authorize, authorize_read, cors, validate_json
 from hc.api.forms import FlipsFiltersForm
 from hc.api.models import MAX_DELTA, Flip, Channel, Check, Notification, Ping
-from hc.lib.badges import check_signature, get_badge_svg
+from hc.lib.badges import check_signature, get_badge_svg, get_badge_url
 
 
 class BadChannelException(Exception):
-    pass
+    def __init__(self, message):
+        self.message = message
 
 
 @csrf_exempt
@@ -195,7 +196,7 @@ def create_check(request):
     try:
         _update(check, request.json)
     except BadChannelException as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        return JsonResponse({"error": e.message}, status=400)
 
     return JsonResponse(check.to_dict(), status=201 if created else 200)
 
@@ -249,7 +250,7 @@ def update_check(request, code):
     try:
         _update(check, request.json)
     except BadChannelException as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        return JsonResponse({"error": e.message}, status=400)
 
     return JsonResponse(check.to_dict())
 
@@ -374,6 +375,28 @@ def flips_by_unique_key(request, unique_key):
         if check.unique_key == unique_key:
             return flips(request, check)
     return HttpResponseNotFound()
+
+
+@cors("GET")
+@authorize_read
+def badges(request):
+    tags = set(["*"])
+    for check in Check.objects.filter(project=request.project):
+        tags.update(check.tags_list())
+
+    key = request.project.badge_key
+    badges = {}
+    for tag in tags:
+        badges[tag] = {
+            "svg": get_badge_url(key, tag),
+            "svg3": get_badge_url(key, tag, with_late=True),
+            "json": get_badge_url(key, tag, fmt="json"),
+            "json3": get_badge_url(key, tag, fmt="json", with_late=True),
+            "shields": get_badge_url(key, tag, fmt="shields"),
+            "shields3": get_badge_url(key, tag, fmt="shields", with_late=True),
+        }
+
+    return JsonResponse({"badges": badges})
 
 
 @never_cache

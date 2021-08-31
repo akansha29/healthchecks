@@ -33,15 +33,12 @@ class EmailThread(Thread):
 
 
 def make_message(name, to, ctx, headers={}):
-    ctx["SITE_ROOT"] = settings.SITE_ROOT
-
     subject = render("emails/%s-subject.html" % name, ctx).strip()
     body = render("emails/%s-body-text.html" % name, ctx)
     html = render("emails/%s-body-html.html" % name, ctx)
 
     msg = EmailMultiAlternatives(subject, body, to=(to,), headers=headers)
     msg.attach_alternative(html, "text/html")
-
     return msg
 
 

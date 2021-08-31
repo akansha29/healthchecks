@@ -245,7 +245,7 @@ def status(request, code):
             {
                 "code": str(check.code),
                 "status": check.get_status(),
-                "last_ping": LAST_PING_TMPL.render(ctx),
+                "last_ping": LAST_PING_TMPL.render(ctx).strip(),
                 "started": check.last_start is not None,
             }
         )
@@ -951,82 +951,84 @@ def remove_channel(request, code):
 
 
 @login_required
-def add_email(request, code):
-    project = _get_rw_project_for_user(request, code)
+def email_form(request, channel=None, code=None):
+    """ Add email integration or edit an existing email integration. """
+
+    is_new = channel is None
+    if is_new:
+        project = _get_rw_project_for_user(request, code)
+        channel = Channel(project=project, kind="email")
 
     if request.method == "POST":
-        form = forms.AddEmailForm(request.POST)
+        form = forms.EmailForm(request.POST)
         if form.is_valid():
-            channel = Channel(project=project, kind="email")
-            channel.value = json.dumps(
-                {
-                    "value": form.cleaned_data["value"],
-                    "up": form.cleaned_data["up"],
-                    "down": form.cleaned_data["down"],
-                }
-            )
+            if form.cleaned_data["value"] != channel.email_value:
+                if not settings.EMAIL_USE_VERIFICATION:
+                    # In self-hosted setting, administator can set
+                    # EMAIL_USE_VERIFICATION=False to disable email verification
+                    channel.email_verified = True
+                elif form.cleaned_data["value"] == request.user.email:
+                    # If the user is adding *their own* address
+                    # we skip the verification step
+                    channel.email_verified = True
+                else:
+                    channel.email_verified = False
+
+            channel.value = form.get_value()
             channel.save()
 
-            channel.assign_all_checks()
+            if is_new:
+                channel.assign_all_checks()
 
-            is_own_email = form.cleaned_data["value"] == request.user.email
-            if is_own_email or not settings.EMAIL_USE_VERIFICATION:
-                # If user is subscribing *their own* address
-                # we can skip the verification step.
-
-                # Additionally, in self-hosted setting, administator has the
-                # option to disable the email verification step altogether.
-
-                channel.email_verified = True
-                channel.save()
-            else:
+            if not channel.email_verified:
                 channel.send_verify_link()
 
-            return redirect("hc-channels", project.code)
+            return redirect("hc-channels", channel.project.code)
+    elif is_new:
+        form = forms.EmailForm()
     else:
-        form = forms.AddEmailForm()
+        form = forms.EmailForm(
+            {
+                "value": channel.email_value,
+                "up": channel.email_notify_up,
+                "down": channel.email_notify_down,
+            }
+        )
 
     ctx = {
         "page": "channels",
-        "project": project,
+        "project": channel.project,
         "use_verification": settings.EMAIL_USE_VERIFICATION,
         "form": form,
+        "is_new": is_new,
     }
-    return render(request, "integrations/add_email.html", ctx)
+    return render(request, "integrations/email_form.html", ctx)
+
+
+@login_required
+def edit_channel(request, code):
+    channel = _get_rw_channel_for_user(request, code)
+    if channel.kind == "email":
+        return email_form(request, channel=channel)
+    if channel.kind == "webhook":
+        return webhook_form(request, channel=channel)
+    if channel.kind == "sms":
+        return sms_form(request, channel=channel)
+    if channel.kind == "signal":
+        return signal_form(request, channel=channel)
+    if channel.kind == "whatsapp":
+        return whatsapp_form(request, channel=channel)
+
+    return HttpResponseBadRequest()
 
 
 @require_setting("WEBHOOKS_ENABLED")
 @login_required
-def add_webhook(request, code):
-    project = _get_rw_project_for_user(request, code)
-
-    if request.method == "POST":
-        form = forms.WebhookForm(request.POST)
-        if form.is_valid():
-            channel = Channel(project=project, kind="webhook")
-            channel.name = form.cleaned_data["name"]
-            channel.value = form.get_value()
-            channel.save()
-
-            channel.assign_all_checks()
-            return redirect("hc-channels", project.code)
-
-    else:
-        form = forms.WebhookForm()
-
-    ctx = {
-        "page": "channels",
-        "project": project,
-        "form": form,
-    }
-    return render(request, "integrations/webhook_form.html", ctx)
-
-
-@login_required
-def edit_webhook(request, code):
-    channel = _get_rw_channel_for_user(request, code)
-    if channel.kind != "webhook":
-        return HttpResponseBadRequest()
+def webhook_form(request, channel=None, code=None):
+    is_new = channel is None
+    if is_new:
+        project = _get_rw_project_for_user(request, code)
+        channel = Channel(project=project, kind="webhook")
 
     if request.method == "POST":
         form = forms.WebhookForm(request.POST)
@@ -1034,8 +1036,14 @@ def edit_webhook(request, code):
             channel.name = form.cleaned_data["name"]
             channel.value = form.get_value()
             channel.save()
+
+            if is_new:
+                channel.assign_all_checks()
 
             return redirect("hc-channels", channel.project.code)
+
+    elif is_new:
+        form = forms.WebhookForm()
     else:
 
         def flatten(d):
@@ -1045,14 +1053,13 @@ def edit_webhook(request, code):
         doc["headers_down"] = flatten(doc["headers_down"])
         doc["headers_up"] = flatten(doc["headers_up"])
         doc["name"] = channel.name
-
         form = forms.WebhookForm(doc)
 
     ctx = {
         "page": "channels",
         "project": channel.project,
-        "channel": channel,
         "form": form,
+        "is_new": is_new,
     }
     return render(request, "integrations/webhook_form.html", ctx)
 
@@ -1625,28 +1632,42 @@ def add_telegram(request):
 
 @require_setting("TWILIO_AUTH")
 @login_required
-def add_sms(request, code):
-    project = _get_rw_project_for_user(request, code)
+def sms_form(request, channel=None, code=None):
+    is_new = channel is None
+    if is_new:
+        project = _get_rw_project_for_user(request, code)
+        channel = Channel(project=project, kind="sms")
+
     if request.method == "POST":
         form = forms.PhoneUpDownForm(request.POST)
         if form.is_valid():
-            channel = Channel(project=project, kind="sms")
             channel.name = form.cleaned_data["label"]
             channel.value = form.get_json()
             channel.save()
 
-            channel.assign_all_checks()
-            return redirect("hc-channels", project.code)
-    else:
+            if is_new:
+                channel.assign_all_checks()
+            return redirect("hc-channels", channel.project.code)
+    elif is_new:
         form = forms.PhoneUpDownForm(initial={"up": False})
+    else:
+        form = forms.PhoneUpDownForm(
+            {
+                "label": channel.name,
+                "phone": channel.phone_number,
+                "up": channel.sms_notify_up,
+                "down": channel.sms_notify_down,
+            }
+        )
 
     ctx = {
         "page": "channels",
-        "project": project,
+        "project": channel.project,
         "form": form,
-        "profile": project.owner_profile,
+        "profile": channel.project.owner_profile,
+        "is_new": is_new,
     }
-    return render(request, "integrations/add_sms.html", ctx)
+    return render(request, "integrations/sms_form.html", ctx)
 
 
 @require_setting("TWILIO_AUTH")
@@ -1677,54 +1698,81 @@ def add_call(request, code):
 
 @require_setting("TWILIO_USE_WHATSAPP")
 @login_required
-def add_whatsapp(request, code):
-    project = _get_rw_project_for_user(request, code)
+def whatsapp_form(request, channel=None, code=None):
+    is_new = channel is None
+    if is_new:
+        project = _get_rw_project_for_user(request, code)
+        channel = Channel(project=project, kind="whatsapp")
+
     if request.method == "POST":
         form = forms.PhoneUpDownForm(request.POST)
         if form.is_valid():
-            channel = Channel(project=project, kind="whatsapp")
             channel.name = form.cleaned_data["label"]
             channel.value = form.get_json()
             channel.save()
 
-            channel.assign_all_checks()
-            return redirect("hc-channels", project.code)
-    else:
+            if is_new:
+                channel.assign_all_checks()
+            return redirect("hc-channels", channel.project.code)
+    elif is_new:
         form = forms.PhoneUpDownForm()
+    else:
+        form = forms.PhoneUpDownForm(
+            {
+                "label": channel.name,
+                "phone": channel.phone_number,
+                "up": channel.whatsapp_notify_up,
+                "down": channel.whatsapp_notify_down,
+            }
+        )
 
     ctx = {
         "page": "channels",
-        "project": project,
+        "project": channel.project,
         "form": form,
-        "profile": project.owner_profile,
+        "profile": channel.project.owner_profile,
+        "is_new": is_new,
     }
-    return render(request, "integrations/add_whatsapp.html", ctx)
+    return render(request, "integrations/whatsapp_form.html", ctx)
 
 
 @require_setting("SIGNAL_CLI_ENABLED")
 @login_required
-def add_signal(request, code):
-    project = _get_rw_project_for_user(request, code)
+def signal_form(request, channel=None, code=None):
+    is_new = channel is None
+    if is_new:
+        project = _get_rw_project_for_user(request, code)
+        channel = Channel(project=project, kind="signal")
+
     if request.method == "POST":
         form = forms.PhoneUpDownForm(request.POST)
         if form.is_valid():
-            channel = Channel(project=project, kind="signal")
             channel.name = form.cleaned_data["label"]
             channel.value = form.get_json()
             channel.save()
 
-            channel.assign_all_checks()
-            return redirect("hc-channels", project.code)
-    else:
+            if is_new:
+                channel.assign_all_checks()
+            return redirect("hc-channels", channel.project.code)
+    elif is_new:
         form = forms.PhoneUpDownForm()
+    else:
+        form = forms.PhoneUpDownForm(
+            {
+                "label": channel.name,
+                "phone": channel.phone_number,
+                "up": channel.signal_notify_up,
+                "down": channel.signal_notify_down,
+            }
+        )
 
     ctx = {
         "page": "channels",
-        "project": project,
+        "project": channel.project,
         "form": form,
-        "profile": project.owner_profile,
+        "is_new": is_new,
     }
-    return render(request, "integrations/add_signal.html", ctx)
+    return render(request, "integrations/signal_form.html", ctx)
 
 
 @require_setting("TRELLO_APP_KEY")

@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v1.23.0 - Unreleased
+
+### Improvements
+- Add /api/v1/badges/ endpoint (#552)
+- Add ability to edit existing email, Signal, SMS, WhatsApp integrations
+
+### Bug Fixes
+- Add handling for non-latin-1 characters in webhook headers
+- Fix dark mode bug in selectpicker widgets
+- Fix a crash during login when user's profile does not exist (#77)
+
 ## v1.22.0 - 2020-08-06
 
 ### Improvements

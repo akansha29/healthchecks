@@ -73,11 +73,11 @@ table.channels-table > tbody > tr > th {
 
 .edit-checks:hover {
     text-decoration: none;
-    color: #000;
 }
 
 .channel-row .actions {
     text-align: right;
+    padding-right: 16px;
 }
 
 .channel-row .actions form {

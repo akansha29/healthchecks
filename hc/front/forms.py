@@ -15,6 +15,14 @@ from hc.front.validators import (
 import requests
 
 
+def _is_latin1(s):
+    try:
+        s.encode("latin-1")
+        return True
+    except UnicodeError:
+        return False
+
+
 class HeadersField(forms.Field):
     message = """Use "Header-Name: value" pairs, one per line."""
 
@@ -34,6 +42,11 @@ class HeadersField(forms.Field):
             n, v = n.strip(), v.strip()
             if not n or not v:
                 raise ValidationError(message=self.message)
+
+            if not _is_latin1(n):
+                raise ValidationError(
+                    message="Header names must not contain special characters"
+                )
 
             headers[n] = v
 
@@ -127,7 +140,7 @@ class AddPushoverForm(forms.Form):
         return "%s|%s|%s" % (key, prio, prio_up)
 
 
-class AddEmailForm(forms.Form):
+class EmailForm(forms.Form):
     error_css_class = "has-error"
     value = forms.EmailField(max_length=100)
     down = forms.BooleanField(required=False, initial=True)
@@ -141,6 +154,9 @@ class AddEmailForm(forms.Form):
 
         if not down and not up:
             self.add_error("down", "Please select at least one.")
+
+    def get_value(self):
+        return json.dumps(dict(self.cleaned_data), sort_keys=True)
 
 
 class AddUrlForm(forms.Form):
@@ -215,6 +231,15 @@ class PhoneNumberForm(forms.Form):
 class PhoneUpDownForm(PhoneNumberForm):
     up = forms.BooleanField(required=False, initial=True)
     down = forms.BooleanField(required=False, initial=True)
+
+    def clean(self):
+        super().clean()
+
+        down = self.cleaned_data.get("down")
+        up = self.cleaned_data.get("up")
+
+        if not down and not up:
+            self.add_error("down", "Please select at least one.")
 
     def get_json(self):
         return json.dumps(

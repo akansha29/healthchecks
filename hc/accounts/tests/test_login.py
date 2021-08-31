@@ -21,6 +21,7 @@ class LoginTestCase(BaseTestCase):
         r = self.client.get("/accounts/login/")
         self.assertRedirects(r, self.checks_url)
 
+    @override_settings(SITE_ROOT="http://testserver")
     def test_it_sends_link(self):
         form = {"identity": "alice@example.org"}
 
@@ -29,8 +30,17 @@ class LoginTestCase(BaseTestCase):
 
         # And email should have been sent
         self.assertEqual(len(mail.outbox), 1)
-        subject = "Log in to %s" % settings.SITE_NAME
-        self.assertEqual(mail.outbox[0].subject, subject)
+        message = mail.outbox[0]
+        self.assertEqual(message.subject, f"Log in to {settings.SITE_NAME}")
+        html = message.alternatives[0][0]
+        self.assertIn("http://testserver/static/img/logo.png", html)
+        self.assertIn("http://testserver/docs/", html)
+
+    @override_settings(SITE_LOGO_URL="https://example.org/logo.svg")
+    def test_it_uses_custom_logo(self):
+        self.client.post("/accounts/login/", {"identity": "alice@example.org"})
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("https://example.org/logo.svg", html)
 
     def test_it_sends_link_with_next(self):
         form = {"identity": "alice@example.org"}
@@ -161,3 +171,11 @@ class LoginTestCase(BaseTestCase):
         # Instead, it should set 2fa_user_id in the session
         user_id, email, valid_until = self.client.session["2fa_user"]
         self.assertEqual(user_id, self.alice.id)
+
+    def test_it_handles_missing_profile(self):
+        self.profile.delete()
+
+        form = {"action": "login", "email": "alice@example.org", "password": "password"}
+
+        r = self.client.post("/accounts/login/", form)
+        self.assertRedirects(r, self.checks_url)
