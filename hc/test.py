@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.signing import TimestampSigner
-from django.test import TestCase
+from django.test import Client, TestCase
 
 from hc.accounts.models import Member, Profile, Project
 
@@ -8,6 +8,8 @@ from hc.accounts.models import Member, Profile, Project
 class BaseTestCase(TestCase):
     def setUp(self):
         super().setUp()
+
+        self.csrf_client = Client(enforce_csrf_checks=True)
 
         # Alice is a normal user for tests. Alice has team access enabled.
         self.alice = User(username="alice", email="alice@example.org")
@@ -17,6 +19,7 @@ class BaseTestCase(TestCase):
         self.project = Project(owner=self.alice, api_key="X" * 32)
         self.project.name = "Alices Project"
         self.project.badge_key = self.alice.username
+        self.project.ping_key = "p" * 22
         self.project.save()
 
         self.profile = Profile(user=self.alice)

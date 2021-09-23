@@ -12,7 +12,7 @@ class CreateCheckTestCase(BaseTestCase):
         if "api_key" not in data:
             data["api_key"] = "X" * 32
 
-        r = self.client.post(self.URL, data, content_type="application/json")
+        r = self.csrf_client.post(self.URL, data, content_type="application/json")
         if expect_fragment:
             self.assertEqual(r.status_code, 400)
             self.assertIn(expect_fragment, r.json()["error"])
@@ -28,6 +28,7 @@ class CreateCheckTestCase(BaseTestCase):
         doc = r.json()
         assert "ping_url" in doc
         self.assertEqual(doc["name"], "Foo")
+        self.assertEqual(doc["slug"], "foo")
         self.assertEqual(doc["tags"], "bar,baz")
         self.assertEqual(doc["last_ping"], None)
         self.assertEqual(doc["n_pings"], 0)
@@ -38,6 +39,7 @@ class CreateCheckTestCase(BaseTestCase):
 
         check = Check.objects.get()
         self.assertEqual(check.name, "Foo")
+        self.assertEqual(check.slug, "foo")
         self.assertEqual(check.tags, "bar,baz")
         self.assertEqual(check.methods, "")
         self.assertEqual(check.timeout.total_seconds(), 3600)

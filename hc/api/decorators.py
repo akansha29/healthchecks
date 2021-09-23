@@ -16,8 +16,10 @@ def authorize(f):
     def wrapper(request, *args, **kwds):
         if "HTTP_X_API_KEY" in request.META:
             api_key = request.META["HTTP_X_API_KEY"]
-        else:
+        elif hasattr(request, "json"):
             api_key = str(request.json.get("api_key", ""))
+        else:
+            api_key = ""
 
         if len(api_key) != 32:
             return error("missing api key", 401)
@@ -38,8 +40,10 @@ def authorize_read(f):
     def wrapper(request, *args, **kwds):
         if "HTTP_X_API_KEY" in request.META:
             api_key = request.META["HTTP_X_API_KEY"]
-        else:
+        elif hasattr(request, "json"):
             api_key = str(request.json.get("api_key", ""))
+        else:
+            api_key = ""
 
         if len(api_key) != 32:
             return error("missing api key", 401)
@@ -69,7 +73,7 @@ def validate_json(schema=None):
     def decorator(f):
         @wraps(f)
         def wrapper(request, *args, **kwds):
-            if request.body:
+            if request.method == "POST" and request.body:
                 try:
                     request.json = json.loads(request.body.decode())
                 except ValueError:

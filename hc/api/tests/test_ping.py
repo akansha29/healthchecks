@@ -11,7 +11,7 @@ class PingTestCase(BaseTestCase):
     def setUp(self):
         super().setUp()
         self.check = Check.objects.create(project=self.project)
-        self.url = "/ping/%s" % self.check.code
+        self.url = f"/ping/{self.check.code}"
 
     def test_it_works(self):
         r = self.client.get(self.url)
@@ -23,7 +23,7 @@ class PingTestCase(BaseTestCase):
         expected_aa = self.check.last_ping + td(days=1, hours=1)
         self.assertEqual(self.check.alert_after, expected_aa)
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.scheme, "http")
         self.assertEqual(ping.kind, None)
         self.assertEqual(ping.created, self.check.last_ping)
@@ -54,7 +54,7 @@ class PingTestCase(BaseTestCase):
         r = csrf_client.post(self.url, "hello world", content_type="text/plain")
         self.assertEqual(r.status_code, 200)
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.method, "POST")
         self.assertEqual(ping.body, "hello world")
 
@@ -76,6 +76,7 @@ class PingTestCase(BaseTestCase):
     def test_it_handles_missing_check(self):
         r = self.client.get("/ping/07c2f548-9850-4b27-af5d-6c9dc157ec02/")
         self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.content.decode(), "not found")
 
     def test_it_handles_120_char_ua(self):
         ua = (
@@ -87,7 +88,7 @@ class PingTestCase(BaseTestCase):
         r = self.client.get(self.url, HTTP_USER_AGENT=ua)
         self.assertEqual(r.status_code, 200)
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.ua, ua)
 
     def test_it_truncates_long_ua(self):
@@ -96,26 +97,27 @@ class PingTestCase(BaseTestCase):
         r = self.client.get(self.url, HTTP_USER_AGENT=ua)
         self.assertEqual(r.status_code, 200)
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(len(ping.ua), 200)
         assert ua.startswith(ping.ua)
 
     def test_it_reads_forwarded_ip(self):
         ip = "1.1.1.1"
         r = self.client.get(self.url, HTTP_X_FORWARDED_FOR=ip)
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(ping.remote_addr, "1.1.1.1")
 
+    def test_it_reads_first_forwarded_ip(self):
         ip = "1.1.1.1, 2.2.2.2"
         r = self.client.get(self.url, HTTP_X_FORWARDED_FOR=ip, REMOTE_ADDR="3.3.3.3",)
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(ping.remote_addr, "1.1.1.1")
 
     def test_it_reads_forwarded_protocol(self):
         r = self.client.get(self.url, HTTP_X_FORWARDED_PROTO="https")
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(ping.scheme, "https")
 
@@ -132,7 +134,7 @@ class PingTestCase(BaseTestCase):
         self.assertTrue(self.check.has_confirmation_link)
 
     def test_fail_endpoint_works(self):
-        r = self.client.get("/ping/%s/fail" % self.check.code)
+        r = self.client.get(self.url + "/fail")
         self.assertEqual(r.status_code, 200)
 
         self.check.refresh_from_db()
@@ -151,7 +153,7 @@ class PingTestCase(BaseTestCase):
         self.check.last_ping = last_ping
         self.check.save()
 
-        r = self.client.get("/ping/%s/start" % self.check.code)
+        r = self.client.get(self.url + "/start")
         self.assertEqual(r.status_code, 200)
 
         self.check.refresh_from_db()
@@ -165,7 +167,7 @@ class PingTestCase(BaseTestCase):
         self.check.status = "paused"
         self.check.save()
 
-        r = self.client.get("/ping/%s/start" % self.check.code)
+        r = self.client.get(self.url + "/start")
         self.assertEqual(r.status_code, 200)
 
         self.check.refresh_from_db()
@@ -193,7 +195,7 @@ class PingTestCase(BaseTestCase):
         self.assertEqual(self.check.status, "new")
         self.assertIsNone(self.check.last_ping)
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.scheme, "http")
         self.assertEqual(ping.kind, "ign")
 
@@ -201,7 +203,7 @@ class PingTestCase(BaseTestCase):
     def test_it_chops_long_body(self):
         self.client.post(self.url, "hello world", content_type="text/plain")
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.method, "POST")
         self.assertEqual(ping.body, "hello")
 
@@ -209,7 +211,7 @@ class PingTestCase(BaseTestCase):
     def test_it_allows_unlimited_body(self):
         self.client.post(self.url, "A" * 20000, content_type="text/plain")
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(len(ping.body), 20000)
 
     def test_it_handles_manual_resume_flag(self):
@@ -223,28 +225,32 @@ class PingTestCase(BaseTestCase):
         self.check.refresh_from_db()
         self.assertEqual(self.check.status, "paused")
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.scheme, "http")
         self.assertEqual(ping.kind, "ign")
 
     def test_zero_exit_status_works(self):
-        r = self.client.get("/ping/%s/0" % self.check.code)
+        r = self.client.get(self.url + "/0")
         self.assertEqual(r.status_code, 200)
 
         self.check.refresh_from_db()
         self.assertEqual(self.check.status, "up")
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.kind, None)
         self.assertEqual(ping.exitstatus, 0)
 
     def test_nonzero_exit_status_works(self):
-        r = self.client.get("/ping/%s/123" % self.check.code)
+        r = self.client.get(self.url + "/123")
         self.assertEqual(r.status_code, 200)
 
         self.check.refresh_from_db()
         self.assertEqual(self.check.status, "down")
 
-        ping = Ping.objects.latest("id")
+        ping = Ping.objects.get()
         self.assertEqual(ping.kind, "fail")
         self.assertEqual(ping.exitstatus, 123)
+
+    def test_it_rejects_exit_status_over_255(self):
+        r = self.client.get(self.url + "/256")
+        self.assertEqual(r.status_code, 400)

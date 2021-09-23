@@ -322,6 +322,8 @@ class Project(models.Model):
     api_key = models.CharField(max_length=128, blank=True, db_index=True)
     api_key_readonly = models.CharField(max_length=128, blank=True, db_index=True)
     badge_key = models.CharField(max_length=150, unique=True)
+    ping_key = models.CharField(max_length=128, blank=True, null=True, unique=True)
+    show_slugs = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name or self.owner.email
@@ -335,11 +337,6 @@ class Project(models.Model):
 
     def num_checks_available(self):
         return self.owner_profile.num_checks_available()
-
-    def set_api_keys(self):
-        self.api_key = token_urlsafe(nbytes=24)
-        self.api_key_readonly = token_urlsafe(nbytes=24)
-        self.save()
 
     def invite_suggestions(self):
         q = User.objects.filter(memberships__project__owner_id=self.owner_id)

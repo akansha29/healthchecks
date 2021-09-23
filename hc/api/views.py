@@ -31,8 +31,15 @@ class BadChannelException(Exception):
 
 @csrf_exempt
 @never_cache
-def ping(request, code, action="success", exitstatus=None):
-    check = get_object_or_404(Check, code=code)
+def ping(request, code, check=None, action="success", exitstatus=None):
+    if check is None:
+        try:
+            check = Check.objects.get(code=code)
+        except Check.DoesNotExist:
+            return HttpResponseNotFound("not found")
+
+    if exitstatus is not None and exitstatus > 255:
+        return HttpResponseBadRequest("invalid url format")
 
     headers = request.META
     remote_addr = headers.get("HTTP_X_FORWARDED_FOR", headers["REMOTE_ADDR"])
@@ -53,6 +60,18 @@ def ping(request, code, action="success", exitstatus=None):
     response = HttpResponse("OK")
     response["Access-Control-Allow-Origin"] = "*"
     return response
+
+
+@csrf_exempt
+def ping_by_slug(request, ping_key, slug, action="success", exitstatus=None):
+    try:
+        check = Check.objects.get(slug=slug, project__ping_key=ping_key)
+    except Check.DoesNotExist:
+        return HttpResponseNotFound("not found")
+    except Check.MultipleObjectsReturned:
+        return HttpResponse("ambiguous slug", status=409)
+
+    return ping(request, check.code, check, action, exitstatus)
 
 
 def _lookup(project, spec):
@@ -108,7 +127,7 @@ def _update(check, spec):
         need_save = True
 
     if "name" in spec and check.name != spec["name"]:
-        check.name = spec["name"]
+        check.set_name_slug(spec["name"])
         need_save = True
 
     if "tags" in spec and check.tags != spec["tags"]:
@@ -160,7 +179,6 @@ def _update(check, spec):
         check.channel_set.set(new_channels)
 
 
-@validate_json()
 @authorize_read
 def get_checks(request):
     q = Check.objects.filter(project=request.project)
@@ -211,7 +229,7 @@ def checks(request):
 
 
 @cors("GET")
-@validate_json()
+@csrf_exempt
 @authorize
 def channels(request):
     q = Channel.objects.filter(project=request.project)
@@ -219,7 +237,6 @@ def channels(request):
     return JsonResponse({"channels": channels})
 
 
-@validate_json()
 @authorize_read
 def get_check(request, code):
     check = get_object_or_404(Check, code=code)
@@ -230,7 +247,6 @@ def get_check(request, code):
 
 @cors("GET")
 @csrf_exempt
-@validate_json()
 @authorize_read
 def get_check_by_unique_key(request, unique_key):
     checks = Check.objects.filter(project=request.project.id)
@@ -255,7 +271,6 @@ def update_check(request, code):
     return JsonResponse(check.to_dict())
 
 
-@validate_json()
 @authorize
 def delete_check(request, code):
     check = get_object_or_404(Check, code=code)
@@ -301,6 +316,7 @@ def pause(request, code):
 
 
 @cors("GET")
+@csrf_exempt
 @validate_json()
 @authorize
 def pings(request, code):
@@ -358,7 +374,6 @@ def flips(request, check):
 
 @cors("GET")
 @csrf_exempt
-@validate_json()
 @authorize_read
 def flips_by_uuid(request, code):
     check = get_object_or_404(Check, code=code)
@@ -367,7 +382,6 @@ def flips_by_uuid(request, code):
 
 @cors("GET")
 @csrf_exempt
-@validate_json()
 @authorize_read
 def flips_by_unique_key(request, unique_key):
     checks = Check.objects.filter(project=request.project.id)
@@ -378,6 +392,7 @@ def flips_by_unique_key(request, unique_key):
 
 
 @cors("GET")
+@csrf_exempt
 @authorize_read
 def badges(request):
     tags = set(["*"])

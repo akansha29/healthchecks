@@ -13,7 +13,7 @@ class UpdateCheckTestCase(BaseTestCase):
 
     def post(self, code, data):
         url = "/api/v1/checks/%s" % code
-        return self.client.post(url, data, content_type="application/json")
+        return self.csrf_client.post(url, data, content_type="application/json")
 
     def test_it_works(self):
         self.check.last_ping = now()
@@ -38,6 +38,7 @@ class UpdateCheckTestCase(BaseTestCase):
         doc = r.json()
         assert "ping_url" in doc
         self.assertEqual(doc["name"], "Foo")
+        self.assertEqual(doc["slug"], "foo")
         self.assertEqual(doc["tags"], "bar,baz")
         self.assertEqual(doc["desc"], "My description")
         self.assertEqual(doc["n_pings"], 0)

@@ -12,6 +12,7 @@ from django.core.signing import TimestampSigner
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from hc.accounts.models import Project
 from hc.api import transports
 from hc.lib import emails
@@ -68,6 +69,7 @@ def isostring(dt):
 
 class Check(models.Model):
     name = models.CharField(max_length=100, blank=True)
+    slug = models.CharField(max_length=100, blank=True)
     tags = models.CharField(max_length=500, blank=True)
     code = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     desc = models.TextField(blank=True)
@@ -100,7 +102,8 @@ class Check(models.Model):
                 fields=["alert_after"],
                 name="api_check_aa_not_down",
                 condition=~models.Q(status="down"),
-            )
+            ),
+            models.Index(fields=["project_id", "slug"], name="api_check_project_slug"),
         ]
 
     def __str__(self):
@@ -113,6 +116,21 @@ class Check(models.Model):
         return str(self.code)
 
     def url(self):
+        """ Return check's ping url in user's preferred style.
+
+        Note: this method reads self.project. If project is not loaded already,
+        this causes a SQL query.
+
+        """
+
+        if self.project_id and self.project.show_slugs:
+            if not self.slug:
+                return None
+
+            # If ping_key is not set, use dummy placeholder
+            key = self.project.ping_key or "{ping_key}"
+            return settings.PING_ENDPOINT + key + "/" + self.slug
+
         return settings.PING_ENDPOINT + str(self.code)
 
     def details_url(self):
@@ -127,6 +145,10 @@ class Check(models.Model):
     def clamped_last_duration(self):
         if self.last_duration and self.last_duration < MAX_DELTA:
             return self.last_duration
+
+    def set_name_slug(self, name):
+        self.name = name
+        self.slug = slugify(name)
 
     def get_grace_start(self, with_started=True):
         """ Return the datetime when the grace period starts.
@@ -224,6 +246,7 @@ class Check(models.Model):
 
         result = {
             "name": self.name,
+            "slug": self.slug,
             "tags": self.tags,
             "desc": self.desc,
             "grace": int(self.grace.total_seconds()),
@@ -244,7 +267,7 @@ class Check(models.Model):
             update_rel_url = reverse("hc-api-single", args=[self.code])
             pause_rel_url = reverse("hc-api-pause", args=[self.code])
 
-            result["ping_url"] = self.url()
+            result["ping_url"] = settings.PING_ENDPOINT + str(self.code)
             result["update_url"] = settings.SITE_ROOT + update_rel_url
             result["pause_url"] = settings.SITE_ROOT + pause_rel_url
             result["channels"] = self.channels_str()
